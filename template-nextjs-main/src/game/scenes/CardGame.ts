@@ -1,17 +1,5 @@
-// import { GameObjects, Scene } from 'phaser';
-// import { EventBus } from '../EventBus';
-// import { createCard, CardObject } from "../createCard";
-
-// // NOTE: No changes needed for these interfaces
-// interface GridConfiguration {
-//     x: number;
-//     y: number;
-//     paddingX: number;
-//     paddingY: number;
-// }
 import { GameObjects, Scene } from "phaser";
 import { EventBus } from "../EventBus";
-
 import { createCard, CardObject } from "../createCard";
 import { Dialogue, GridConfiguration } from "./types/Types";
 import { DialogueEngine } from "./DialogueEngine";
@@ -30,23 +18,14 @@ export class CardGame extends Scene {
     private pauseOverlay!: Phaser.GameObjects.Rectangle;
     private pauseMenu!: Phaser.GameObjects.Container;
     private isPaused: boolean = false;
-    
+    private peekButton!: GameObjects.Text;
+    private isPeekMode: boolean = false;
+
     // --- Cutscene Elements ---
     private canvasClickHandler?: (ev: MouseEvent) => void;
     private cutsceneOverlay!: Phaser.GameObjects.Rectangle;
     private cutsceneText!: Phaser.GameObjects.Text;
     private cutsceneIndex: number = 0;
-    // private cutsceneLines: string[] = [
-    //     "You and Sidekick wander into an abandoned BANK",
-    //     `in search of Sidekick's missing memory chip,\n following a lead on his radar.`,
-    //     "",
-    //     `Upon arrival, sidekick's radar homes in on a vault,\n guarded by (evil org character). Luckily, he is sleeping.`,
-    //     "",
-    //     `Unlock the vault and steal the component inside,\n without waking up the guard.`,
-    //     "",
-    //     `The vault will start ringing if too many\n incorrect attempts are made.`,
-    //     "",
-    //     "Click to begin..."
     private cutsceneLines: Dialogue[] = [
         {
             speaker: "Narrator",
@@ -78,7 +57,7 @@ export class CardGame extends Scene {
         },
         {
             speaker: "Sidekick",
-            line: "I will try my best, but my accuracy is low without my memory chip. I might hallucinate at times. Be careful, as the alarm will go off if you fail too many times."
+            line: "I will try my best, but my accuracy is low without my memory chip. I might hallucinate at times. Be careful, as the alarm will go off if you fail too many times.",
         },
         {
             speaker: "Narrator",
@@ -105,7 +84,7 @@ export class CardGame extends Scene {
         },
         {
             speaker: "Sidekick",
-            line: "Aye Aye Caption",
+            line: "Aye Aye Captain",
         },
         {
             speaker: "EnemyAwake_Level_1",
@@ -126,7 +105,7 @@ export class CardGame extends Scene {
     private canMove: boolean = false;
     private lives: number = 3;
     private cardNames: string[] = ["card-0", "card-1", "card-2", "card-3", "card-4", "card-5", "card-6", "card-7"];
-    
+
     private gridConfiguration: GridConfiguration = {
         x: 0,
         y: 0,
@@ -134,28 +113,17 @@ export class CardGame extends Scene {
         paddingY: 10,
     };
 
+    constructor() {
+        super("CardGame");
+    }
+
     init() {
         this.cameras.main.fadeIn(500);
         this.lives = 10;
     }
 
-    constructor() {
-        super("CardGame");
-    }
-
     preload() {
         this.load.setPath("assets/card_game/");
-
-        // this.load.image("volume-icon", "ui/volume-icon.png");
-        // this.load.image("volume-icon_off", "ui/volume-icon_off.png");
-
-        // this.load.audio("theme-song", "audio/fat-caps-audionatix.mp3");
-        // this.load.audio("whoosh", "audio/whoosh.mp3");
-        // this.load.audio("card-flip", "audio/card-flip.mp3");
-        // this.load.audio("card-match", "audio/card-match.mp3");
-        // this.load.audio("card-mismatch", "audio/card-mismatch.mp3");
-        // this.load.audio("card-slide", "audio/card-slide.mp3");
-        // this.load.audio("victory", "audio/victory.mp3");
         this.load.image("cardgame-bg", "card_lore_bg.png");
         this.load.image("minigame-background", "card_minigame_bg.png");
         this.load.image("card-back", "card_unopened.png");
@@ -168,11 +136,9 @@ export class CardGame extends Scene {
         this.load.spritesheet("card-5", "./card_faces/face_6.png", { frameWidth: 28, frameHeight: 32 });
         this.load.spritesheet("card-6", "./card_faces/face_7.png", { frameWidth: 28, frameHeight: 32 });
         this.load.spritesheet("card-7", "./card_faces/face_8.png", { frameWidth: 28, frameHeight: 32 });
-
         this.load.image("heart", "pixel_heart.png");
         this.load.image("card-enemy-sleep", "CardGameEnemyAsleep.png");
         this.load.image("card-enemy-awake", "CardGameEnemyAwake.png");
-
         this.load.setPath("assets/");
         this.load.image("player", "Player.png");
         this.load.image("sidekick", "Sidekick.png");
@@ -181,14 +147,17 @@ export class CardGame extends Scene {
     }
 
     create() {
-
         this.cutsceneIndex = 0;
         this.events.once('shutdown', this.cleanup, this);
 
         this.background = this.add.image(512, 384, 'cardgame-bg');
         this.addMinigameBackground();
         this.createSettingsButton();
-        this.focusIndicator = this.add.rectangle(0, 0, 310, 65, 0xffff00, 0).setStrokeStyle(2, 0xffff00).setVisible(false).setDepth(10000);
+        this.createPeekButton();
+        this.focusIndicator = this.add.rectangle(0, 0, 310, 65, 0xffff00, 0)
+            .setStrokeStyle(2, 0xffff00)
+            .setVisible(false)
+            .setDepth(10000);
 
         const canvas = this.game.canvas as HTMLCanvasElement;
         if (canvas) {
@@ -197,45 +166,24 @@ export class CardGame extends Scene {
             this.canvasClickHandler = () => {
                 canvas.focus();
                 console.log('Canvas focused via click (CardGame)');
-        
             };
             canvas.addEventListener("click", this.canvasClickHandler);
         }
 
         this.input.keyboard?.on('keydown-Q', this.togglePauseMenu, this);
-
         this.layout();
-
         this.scale.on("resize", this.layout, this);
 
-        const cutsceneEngine: DialogueEngine = new DialogueEngine(
-            this,
-            this.cutsceneLines
-        );
-
+        const cutsceneEngine: DialogueEngine = new DialogueEngine(this, this.cutsceneLines);
         cutsceneEngine.start();
         this.events.once("dialogueComplete", this.startGame, this);
         EventBus.emit("current-scene-ready", this);
     }
-    
-    // private endCutscene() {
-    //     if (this.cutsceneOverlay) {
-    //         this.cutsceneOverlay.destroy();
-    //     }
-    //     if (this.cutsceneText) {
-    //         this.cutsceneText.destroy();
-    //     }
-    //     this.input.off('pointerdown', this.advanceCutscene, this);
-        
-    //     this.minigameBackground.setVisible(true);
-    //     this.startGame();
-    // }
-
-    // --- Positioning and Layout ---
 
     private layout = () => {
         let w = this.scale.width;
         let h = this.scale.height;
+        const PADDING = 20;
 
         const scaleX = Math.floor(w / this.background.width);
         const scaleY = Math.floor(h / this.background.height);
@@ -254,8 +202,18 @@ export class CardGame extends Scene {
 
         this.positionGameElements();
 
-        this.settingsButton.setPosition(w - 50, 30);
-        this.settingsText.setPosition(w - 50, 30);
+        if (this.settingsButton && this.settingsText) {
+            const settingsX = w - PADDING - (this.settingsButton.width / 2);
+            const settingsY = PADDING + (this.settingsButton.height / 2);
+            this.settingsButton.setPosition(settingsX, settingsY);
+            this.settingsText.setPosition(settingsX, settingsY);
+        }
+
+        if (this.peekButton) {
+            const peekX = PADDING + (this.peekButton.width / 2);
+            const peekY = PADDING + (this.peekButton.height / 2);
+            this.peekButton.setPosition(peekX, peekY);
+        }
 
         if (this.cutsceneOverlay && this.cutsceneOverlay.active) {
             this.cutsceneOverlay.setSize(w, h);
@@ -269,24 +227,19 @@ export class CardGame extends Scene {
         }
     };
 
-
     private positionGameElements() {
         if (!this.minigameBackground || !this.minigameBackground.active) {
             return;
         }
 
         const bgBounds = this.minigameBackground.getBounds();
-        
-        // --- A helper function for integer scaling ---
+
         const getIntegerScale = (targetSize: number, baseSize: number): number => {
             if (targetSize <= 0 || baseSize <= 0) return 1;
-            
             const idealScale = targetSize / baseSize;
             if (idealScale >= 1) {
-                // Upscaling: use the largest integer that fits.
                 return Math.floor(idealScale);
             } else {
-                // Downscaling: use the nearest clean fraction (1/2, 1/3, etc.) that fits.
                 return 1 / Math.ceil(1 / idealScale);
             }
         };
@@ -297,21 +250,14 @@ export class CardGame extends Scene {
             const baseCardWidth = 48;
             const baseCardHeight = 72;
             const cardPadding = bgBounds.width * 0.0075;
-
-            // First, find the ideal width and calculate the integer scale from that
             const availableWidthForCards = bgBounds.width * 0.95;
             const totalPaddingX = (cols - 1) * cardPadding;
             const targetCardWidth = (availableWidthForCards - totalPaddingX) / cols;
-            
-            // FIX: Calculate final scale using the integer scaling helper
             const finalCardScale = getIntegerScale(targetCardWidth, baseCardWidth);
-
-            // Now, use the final integer scale to calculate the grid dimensions
             const scaledCardWidth = baseCardWidth * finalCardScale;
             const scaledCardHeight = baseCardHeight * finalCardScale;
             const gridWidth = (scaledCardWidth * cols) + ((cols - 1) * cardPadding);
             const gridHeight = (scaledCardHeight * rows) + ((rows - 1) * cardPadding);
-
             const startX = bgBounds.left + (bgBounds.width - gridWidth) / 2;
             const startY = bgBounds.top + (bgBounds.height - gridHeight) / 2;
 
@@ -320,26 +266,18 @@ export class CardGame extends Scene {
                 const row = Math.floor(index / cols);
                 const x = startX + col * (scaledCardWidth + cardPadding) + (scaledCardWidth / 2);
                 const y = startY + row * (scaledCardHeight + cardPadding) + (scaledCardHeight / 2);
-                
                 card.gameObject.setPosition(x, y).setScale(finalCardScale);
             });
         }
-        
+
         if (this.heartImages.length > 0) {
             const baseHeartHeight = 1400;
-
-            // Determine a target display height relative to the game board
             const targetHeartHeight = bgBounds.height * 0.06;
-            
             const finalHeartScale = getIntegerScale(targetHeartHeight, baseHeartHeight);
-            
-            // Use the final scale to determine the dimensions for positioning
             const scaledHeartDisplaySize = baseHeartHeight * finalHeartScale;
             const heartPadding = scaledHeartDisplaySize * 0.2;
-
             const totalHeartsWidth = (this.heartImages.length * scaledHeartDisplaySize) + ((this.heartImages.length - 1) * heartPadding);
             const heartsY = bgBounds.top + (scaledHeartDisplaySize / 2) + heartPadding * 2;
-            
             const startHeartsX = bgBounds.right - heartPadding - totalHeartsWidth - (bgBounds.width * 0.0125);
 
             this.heartImages.forEach((heart, index) => {
@@ -351,20 +289,14 @@ export class CardGame extends Scene {
         }
     }
 
-
-    // --- Game Object Creation ---
-
     private createGridCards() {
         const gridCardNames = Phaser.Utils.Array.Shuffle([...this.cardNames, ...this.cardNames]);
+        const allAnimationKeys = this.cardNames.map(name => `${name}-anim`);
 
         this.cards = gridCardNames.map((name) => {
-        
-            
             const animationKey = `${name}-anim`;
-            
 
             if (!this.anims.get(animationKey)) {
-
                 this.anims.create({
                     key: animationKey,
                     frames: this.anims.generateFrameNumbers(name, { start: 7, end: 0 }),
@@ -373,14 +305,17 @@ export class CardGame extends Scene {
                     showOnStart: true,
                 });
             }
-    
+
             const newCard = createCard({
                 scene: this,
-                x: -1000, y: -1000,
+                x: -1000,
+                y: -1000,
                 frontTexture: "card-front",
                 backTexture: "card-back",
                 animationKey: animationKey,
                 cardName: name,
+                allAnimationKeys: allAnimationKeys,
+                hallucinationChance: 0.15,
             });
             newCard.gameObject.setDepth(10);
             return newCard;
@@ -398,23 +333,32 @@ export class CardGame extends Scene {
             .setAlpha(0.85)
             .setDepth(1)
             .setVisible(false);
-        
-        
     }
-    
-    // --- Game State and Logic ---
 
     private startGame() {
         this.minigameBackground.setVisible(true);
-        this.winnerText = this.add.text(this.scale.width / 2, -1000, "YOU WIN\nClick to play again", { align: "center", strokeThickness: 4, fontSize: 40, fontStyle: "bold", color: "#8c7ae6" }).setOrigin(.5).setDepth(3000).setInteractive({ useHandCursor: true });
-        this.gameOverText = this.add.text(this.scale.width / 2, -1000, "GAME OVER\nClick to restart", { align: "center", strokeThickness: 4, fontSize: 40, fontStyle: "bold", color: "#ff0000" }).setOrigin(.5).setDepth(3000).setInteractive({ useHandCursor: true });
+        this.winnerText = this.add.text(this.scale.width / 2, -1000, "YOU WIN\nClick to play again", {
+            align: "center",
+            strokeThickness: 4,
+            fontSize: 40,
+            fontStyle: "bold",
+            color: "#8c7ae6",
+        }).setOrigin(0.5).setDepth(3000).setInteractive({ useHandCursor: true });
+        this.gameOverText = this.add.text(this.scale.width / 2, -1000, "GAME OVER\nClick to restart", {
+            align: "center",
+            strokeThickness: 4,
+            fontSize: 40,
+            fontStyle: "bold",
+            color: "#ff0000",
+        }).setOrigin(0.5).setDepth(3000).setInteractive({ useHandCursor: true });
 
-        this.winnerText.on('pointerdown', () => this.restartGame());
+        this.winnerText.on('pointerdown', () => this.scene.start('LevelSelect'));
         this.gameOverText.on('pointerdown', () => this.restartGame());
 
         this.createHearts();
         this.createGridCards();
         this.positionGameElements();
+        this.peekButton.setVisible(true);
 
         this.time.delayedCall(500, () => {
             this.canMove = true;
@@ -432,14 +376,21 @@ export class CardGame extends Scene {
             this.scene.restart();
         });
     }
-    
+
     private handleCardClick(pointer: Phaser.Input.Pointer) {
-        if (!this.canMove || this.isPaused) return;
+        if (this.peekButton && this.peekButton.getBounds().contains(pointer.x, pointer.y)) {
+            return;
+        }
+        if (this.settingsButton && this.settingsButton.getBounds().contains(pointer.x, pointer.y)) {
+            return;
+        }
+
+        if (!this.canMove || this.isPaused || this.isPeekMode) return;
 
         const card = this.cards.find(c => c.hasFaceAt(pointer.x, pointer.y));
 
         if (card) {
-            if (card === this.cardOpened) return;
+            if (card === this.cardOpened || !card.isFaceDown()) return;
 
             this.canMove = false;
             card.flip(() => {
@@ -451,11 +402,10 @@ export class CardGame extends Scene {
                         this.cardOpened = undefined;
                         this.canMove = true;
                         this.checkWinCondition();
-                    } 
-                    else {
+                    } else {
                         this.lives--;
                         const heartToRemove = this.heartImages.pop();
-                        
+
                         if (heartToRemove) {
                             this.add.tween({
                                 targets: heartToRemove,
@@ -466,12 +416,12 @@ export class CardGame extends Scene {
                                     if (heartToRemove && heartToRemove.active) {
                                         heartToRemove.destroy();
                                     }
-                                }
+                                },
                             });
                         }
 
                         this.cameras.main.shake(300, 0.01);
-                        
+
                         this.time.delayedCall(500, () => {
                             card.flip();
                             this.cardOpened?.flip(() => {
@@ -495,36 +445,41 @@ export class CardGame extends Scene {
             this.input.setDefaultCursor(card ? "pointer" : "default");
         }
     }
-    
+
     private checkWinCondition() {
         if (this.cards.length === 0) {
             this.canMove = false;
-            this.add.tween({ targets: this.winnerText, y: this.scale.height / 2, ease: 'Bounce.Out', duration: 1000 });
+            this.add.tween({
+                targets: this.winnerText,
+                y: this.scale.height / 2,
+                ease: 'Bounce.Out',
+                duration: 1000,
+            });
         }
     }
 
     private checkLossCondition() {
         if (this.lives <= 0) {
             this.canMove = false;
-            const cutsceneEngine: DialogueEngine = new DialogueEngine(
-                this,
-                this.cutsceneLinesGameOver
-            );
-    
+            const cutsceneEngine: DialogueEngine = new DialogueEngine(this, this.cutsceneLinesGameOver);
             cutsceneEngine.start();
             this.events.once("dialogueComplete", this.gameOverAnimiation, this);
         }
     }
 
     private gameOverAnimiation() {
-        this.add.tween({ targets: this.gameOverText, y: this.scale.height / 2, ease: 'Bounce.Out', duration: 1000 });
+        this.add.tween({
+            targets: this.gameOverText,
+            y: this.scale.height / 2,
+            ease: 'Bounce.Out',
+            duration: 1000,
+        });
     }
 
     private cleanup() {
         console.log('CardGame Cleanup Called');
         this.input.off(Phaser.Input.Events.POINTER_DOWN, this.handleCardClick, this);
         this.input.off(Phaser.Input.Events.POINTER_MOVE, this.handlePointerMove, this);
-
         this.scale.off('resize', this.layout, this);
         this.input.keyboard?.off('keydown-Q', this.togglePauseMenu, this);
 
@@ -538,13 +493,13 @@ export class CardGame extends Scene {
         this.heartImages.forEach(heart => heart.destroy());
         if (this.winnerText) this.winnerText.destroy();
         if (this.gameOverText) this.gameOverText.destroy();
-        
+
         this.cards = [];
         this.heartImages = [];
         this.cardOpened = undefined;
         this.isPaused = false;
+        this.isPeekMode = false;
     }
-
 
     private createSettingsButton() {
         this.settingsButton = this.add
@@ -563,6 +518,54 @@ export class CardGame extends Scene {
             .setDepth(10002);
     }
 
+    private createPeekButton() {
+        this.peekButton = this.add.text(0, 0, 'Peek 🔍', {
+            fontFamily: "Arial Black",
+            fontSize: "18px",
+            color: "#ffffff",
+            backgroundColor: '#333333',
+            padding: { x: 10, y: 5 },
+        })
+            .setOrigin(0.5)
+            .setDepth(10001)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', () => this.togglePeekMode())
+            .setVisible(false);
+    }
+
+    private togglePeekMode() {
+        if (!this.canMove || this.isPaused) return;
+
+        this.isPeekMode = !this.isPeekMode;
+
+        if (this.isPeekMode) {
+            console.log('Peek mode ACTIVATED.');
+            this.peekButton.setText('Exit Peek ✖️')
+                .setColor('#FFC0CB')
+                .setBackgroundColor('#8B0000');
+            
+            // Open all cards that are currently face down
+            this.cards.forEach(card => {
+                if (card.isFaceDown()) {
+                    card.flip();
+                }
+            });
+
+        } else {
+            console.log('Peek mode DEACTIVATED.');
+            this.peekButton.setText('Peek 🔍')
+                .setColor('#ffffff')
+                .setBackgroundColor('#333333');
+
+            // Close all cards that are currently face up
+            this.cards.forEach(card => {
+                if (!card.isFaceDown()) {
+                    card.flip();
+                }
+            });
+        }
+    }
+
     private createPauseMenu() {
         this.pauseOverlay = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.5)
             .setOrigin(0, 0)
@@ -578,7 +581,7 @@ export class CardGame extends Scene {
         const title = this.add.text(0, -70, 'Pause Menu', {
             fontFamily: 'Arial Black',
             fontSize: '24px',
-            color: '#ffffff'
+            color: '#ffffff',
         }).setOrigin(0.5);
         this.pauseMenu.add(title);
 
@@ -612,7 +615,9 @@ export class CardGame extends Scene {
 
         const levelSelectBtn = this.add.rectangle(0, 80, 200, 40, 0x0070f3)
             .setInteractive({ useHandCursor: true })
-            .on('pointerdown', () => {this.cutsceneIndex = 0;this.scene.start('LevelSelect');})
+            .on('pointerdown', () => {
+                this.scene.start('LevelSelect');
+            });
         this.pauseMenu.add(levelSelectBtn);
 
         const levelSelectText = this.add
@@ -641,42 +646,6 @@ export class CardGame extends Scene {
         this.cutsceneIndex = 0;
         this.scene.restart();
     }
-
-    // private startCutscene() {
-    //     this.cutsceneOverlay = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7)
-    //         .setOrigin(0, 0)
-    //         .setDepth(5000);
-
-    //     this.cutsceneText = this.add.text(this.scale.width / 2, this.scale.height / 2, '', {
-    //         fontFamily: 'Arial Black',
-    //         fontSize: '24px',
-    //         color: '#ffffff',
-    //         stroke: '#000000',
-    //         strokeThickness: 4,
-    //         align: 'center',
-    //         wordWrap: { width: this.scale.width * 0.8 }
-    //     }).setOrigin(0.5).setDepth(5001);
-
-    //     this.showCutsceneLine();
-    //     this.input.on('pointerdown', this.advanceCutscene, this);
-    // }
-
-    // private showCutsceneLine() {
-    //     if (this.cutsceneIndex < this.cutsceneLines.length) {
-    //         this.cutsceneText.setText(this.cutsceneLines[this.cutsceneIndex]);
-    //     }
-    // }
-
-    // private advanceCutscene = () => {
-    //     if (this.isPaused) return;
-
-    //     this.cutsceneIndex++;
-    //     if (this.cutsceneIndex >= this.cutsceneLines.length) {
-    //         this.endCutscene();
-    //     } else {
-    //         this.showCutsceneLine();
-    //     }
-    // };
 
     private focusNextButton() {
         this.focusIndex = (this.focusIndex + 1) % this.buttons.length;
