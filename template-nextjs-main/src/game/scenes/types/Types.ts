@@ -5,7 +5,7 @@ export interface GridConfiguration {
     paddingY: number;
 };
 
-export type EntityType = "User" | "Sidekick" | "Narrator" | "CardEnemy";
+export type EntityType = "User" | "Sidekick" | "Narrator" | "EnemySleep_Level_1" | "EnemyAwake_Level_1";
 
 export type Dialogue = {
     speaker: EntityType,

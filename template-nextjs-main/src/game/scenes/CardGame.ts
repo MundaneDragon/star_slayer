@@ -65,7 +65,7 @@ export class CardGame extends Scene {
             line: "Oh boy, how will we get past that evil looking robot though.",
         },
         {
-            speaker: "CardEnemy",
+            speaker: "EnemySleep_Level_1",
             line: "ZzZzZzz",
         },
         {
@@ -83,6 +83,37 @@ export class CardGame extends Scene {
         {
             speaker: "Narrator",
             line: "Click to begin...",
+        },
+    ];
+
+    private cutsceneLinesGameOver: Dialogue[] = [
+        {
+            speaker: "EnemySleep_Level_1",
+            line: "zzzZZZzz...",
+        },
+        {
+            speaker: "Narrator",
+            line: "You run out of tries, vault intruder alert was triggered",
+        },
+        {
+            speaker: "EnemyAwake_Level_1",
+            line: "Huh, What's going on?!?!?",
+        },
+        {
+            speaker: "User",
+            line: "Oh no, lets get out of here",
+        },
+        {
+            speaker: "Sidekick",
+            line: "Aye Aye Caption",
+        },
+        {
+            speaker: "EnemyAwake_Level_1",
+            line: "STOP RUNNING, YOU CAN'T GET AWAY FROM ME THAT EASILY!!",
+        },
+        {
+            speaker: "User",
+            line: "AAAAAAAAAAA",
         },
     ];
 
@@ -265,10 +296,10 @@ export class CardGame extends Scene {
             const cols = 8;
             const baseCardWidth = 48;
             const baseCardHeight = 72;
-            const cardPadding = bgBounds.width * 0.015;
+            const cardPadding = bgBounds.width * 0.0075;
 
             // First, find the ideal width and calculate the integer scale from that
-            const availableWidthForCards = bgBounds.width * 0.85;
+            const availableWidthForCards = bgBounds.width * 0.95;
             const totalPaddingX = (cols - 1) * cardPadding;
             const targetCardWidth = (availableWidthForCards - totalPaddingX) / cols;
             
@@ -475,8 +506,18 @@ export class CardGame extends Scene {
     private checkLossCondition() {
         if (this.lives <= 0) {
             this.canMove = false;
-            this.add.tween({ targets: this.gameOverText, y: this.scale.height / 2, ease: 'Bounce.Out', duration: 1000 });
+            const cutsceneEngine: DialogueEngine = new DialogueEngine(
+                this,
+                this.cutsceneLinesGameOver
+            );
+    
+            cutsceneEngine.start();
+            this.events.once("dialogueComplete", this.gameOverAnimiation, this);
         }
+    }
+
+    private gameOverAnimiation() {
+        this.add.tween({ targets: this.gameOverText, y: this.scale.height / 2, ease: 'Bounce.Out', duration: 1000 });
     }
 
     private cleanup() {
