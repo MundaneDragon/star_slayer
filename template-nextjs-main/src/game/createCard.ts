@@ -1,25 +1,7 @@
 import Phaser from 'phaser';
+import { CardObject, CreateCardConfig } from './scenes/types/Types';
 
-interface CreateCardConfig {
-    scene: Phaser.Scene;
-    x: number;
-    y: number;
-    frontTexture: string;
-    backTexture: string;
-    cardName: string;
-    animationKey: string;
-    allAnimationKeys: string[];
-    hallucinationChance: number;
-}
 
-export interface CardObject {
-    gameObject: Phaser.GameObjects.Container;
-    flip: (callbackComplete?: () => void) => void;
-    destroy: () => void;
-    cardName: string;
-    hasFaceAt: (x: number, y: number) => boolean;
-    isFaceDown: () => boolean;
-}
 
 export const createCard = ({
     scene,

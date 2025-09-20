@@ -1,7 +1,7 @@
 import { GameObjects, Scene } from "phaser";
 import { EventBus } from "../EventBus";
-import { createCard, CardObject } from "../createCard";
-import { Dialogue, GridConfiguration } from "./types/Types";
+import { createCard } from "../createCard";
+import { CardObject, Dialogue, GridConfiguration } from "./types/Types";
 import { DialogueEngine } from "./DialogueEngine";
 
 export class CardGame extends Scene {
