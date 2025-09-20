@@ -183,7 +183,7 @@ export class CardGame extends Scene {
         );
 
         cutsceneEngine.start();
-
+        this.events.once("dialogueComplete", this.startGame, this);
         EventBus.emit("current-scene-ready", this);
     }
     
@@ -203,17 +203,20 @@ export class CardGame extends Scene {
     // --- Positioning and Layout ---
 
     private layout = () => {
-        const w = this.scale.width;
-        const h = this.scale.height;
+        let w = this.scale.width;
+        let h = this.scale.height;
 
-        const scaleX = w / this.background.width;
-        const scaleY = h / this.background.height;
-        const scale = Math.max(scaleX, scaleY);
+        const scaleX = Math.floor(w / this.background.width);
+        const scaleY = Math.floor(h / this.background.height);
+        const scale = Math.min(scaleX, scaleY);
         this.background.setScale(scale).setPosition(w / 2, h / 2);
 
+        const new_w = this.background.displayWidth;
+        const new_h = this.background.displayHeight;
+
         if (this.minigameBackground) {
-            const bgScaleX = (w * 0.9) / this.minigameBackground.width;
-            const bgScaleY = (h * 0.9) / this.minigameBackground.height;
+            const bgScaleX = (new_w * 0.9) / this.minigameBackground.width;
+            const bgScaleY = (new_h * 0.9) / this.minigameBackground.height;
             this.backgroundScale = Math.min(bgScaleX, bgScaleY);
             this.minigameBackground.setScale(this.backgroundScale).setPosition(w / 2, h / 2);
         }
@@ -364,11 +367,14 @@ export class CardGame extends Scene {
             .setAlpha(0.85)
             .setDepth(1)
             .setVisible(false);
+        
+        
     }
     
     // --- Game State and Logic ---
 
     private startGame() {
+        this.minigameBackground.setVisible(true);
         this.winnerText = this.add.text(this.scale.width / 2, -1000, "YOU WIN\nClick to play again", { align: "center", strokeThickness: 4, fontSize: 40, fontStyle: "bold", color: "#8c7ae6" }).setOrigin(.5).setDepth(3000).setInteractive({ useHandCursor: true });
         this.gameOverText = this.add.text(this.scale.width / 2, -1000, "GAME OVER\nClick to restart", { align: "center", strokeThickness: 4, fontSize: 40, fontStyle: "bold", color: "#ff0000" }).setOrigin(.5).setDepth(3000).setInteractive({ useHandCursor: true });
 
