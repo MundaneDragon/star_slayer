@@ -5,14 +5,17 @@ interface CreateCardConfig {
     x: number;
     y: number;
     frontTexture: string;
+    backTexture: string;
     cardName: string;
+    animationKey: string;
 }
 
 export interface CardObject {
-    gameObject: Phaser.GameObjects.Plane;
+    gameObject: Phaser.GameObjects.Container;
     flip: (callbackComplete?: () => void) => void;
     destroy: () => void;
     cardName: string;
+    hasFaceAt: (x: number, y: number) => boolean;
 }
 
 export const createCard = ({
@@ -20,80 +23,151 @@ export const createCard = ({
     x,
     y,
     frontTexture,
-    cardName
+    backTexture,
+    cardName,
+    animationKey
 }: CreateCardConfig): CardObject => {
     let isFlipping: boolean = false;
-    const rotation: { y: number } = { y: 0 };
-    const backTexture: string = "card-back";
+    let isFaceUp: boolean = false;
 
-    const card: Phaser.GameObjects.Plane = scene.add.plane(x, y, backTexture)
-        .setName(cardName)
-        .setInteractive();
+    // --- Card and Animation Dimensions ---
+    const cardWidth = 48;
+    const cardHeight = 72;
+    const animationFrameWidth = 32;
 
-    // Start with the card face down
-    card.modelRotation.y = 180;
+    // --- Create Game Objects ---
+    const container = scene.add.container(x, y);
+    container.setSize(cardWidth, cardHeight);
+    container.setInteractive();
 
-    const flipCard = (callbackComplete?: () => void): void => {
+    // Create the back of the card sprite
+    const backCard = scene.add.sprite(0, 0, backTexture);
+    
+    // Create the front face of the card sprite
+    const frontCard = scene.add.sprite(0, 0, frontTexture)
+        .setVisible(false);
+    
+    // Create the sprite for the opening/closing animation
+    const openAnimation = scene.add.sprite(0, 0, '')
+        .setVisible(false);
+
+    // Set the origins of all sprites to their center to align them
+    backCard.setOrigin(0.5);
+    frontCard.setOrigin(0.5);
+    openAnimation.setOrigin(0.5);
+
+    // Add all sprites to the container
+    container.add([backCard, frontCard, openAnimation]);
+    
+    // Scale the animation sprite to fit correctly on the card face
+    const requiredScale = cardWidth / animationFrameWidth;
+    openAnimation.setScale(requiredScale);
+
+    const flip = (callbackComplete?: () => void): void => {
         if (isFlipping) {
             return;
         }
-        scene.add.tween({
-            targets: [rotation],
-            y: rotation.y === 180 ? 0 : 180,
-            ease: Phaser.Math.Easing.Expo.Out,
-            duration: 500,
-            onStart: () => {
-                isFlipping = true;
-                // scene.sound.play("card-flip");
-                scene.tweens.chain({
-                    targets: card,
-                    ease: Phaser.Math.Easing.Expo.InOut,
-                    tweens: [
-                        {
-                            duration: 200,
-                            scale: 1.1,
-                        },
-                        {
-                            duration: 300,
-                            scale: 1
-                        },
-                    ]
-                });
-            },
-            onUpdate: () => {
-                card.modelRotation.y = 180 + rotation.y;
-                const cardRotation: number = Math.floor(card.modelRotation.y) % 360;
-                if ((cardRotation >= 0 && cardRotation <= 90) || (cardRotation >= 270 && cardRotation <= 359)) {
-                    card.setTexture(frontTexture);
-                } else {
-                    card.setTexture(backTexture);
+        isFlipping = true;
+
+        const originalScaleX = container.scaleX;
+
+        if (!isFaceUp) {
+            // --- FLIPPING TO THE FRONT ---
+            scene.tweens.add({
+                targets: container,
+                scaleX: 0,
+                duration: 200,
+                ease: 'Linear',
+                onComplete: () => {
+                    // At the halfway point, switch the visible card to the front face
+                    backCard.setVisible(false);
+                    frontCard.setVisible(true);
+                    
+                    // Now, scale back up to reveal the front face
+                    scene.tweens.add({
+                        targets: container,
+                        scaleX: originalScaleX,
+                        duration: 200,
+                        ease: 'Linear',
+                        onComplete: () => {
+                            // Once the card is fully visible, play the opening animation on top
+                            openAnimation.setVisible(true);
+                            openAnimation.play(animationKey);
+                        }
+                    });
                 }
-            },
-            onComplete: () => {
+            });
+            
+            // Listen for the animation to finish
+            openAnimation.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
                 isFlipping = false;
+                isFaceUp = true;
                 if (callbackComplete) {
                     callbackComplete();
                 }
-            }
-        });
+            });
+
+        } else {
+            // --- FLIPPING TO THE BACK ---
+            // First, play the animation in reverse
+            openAnimation.playReverse(animationKey);
+
+            // Once the reverse animation is done, hide the effect and flip the card
+            openAnimation.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+                openAnimation.setVisible(false);
+                
+                scene.tweens.add({
+                    targets: container,
+                    scaleX: 0,
+                    duration: 200,
+                    ease: 'Linear',
+                    onComplete: () => {
+                        // At halfway, switch back to the back texture
+                        frontCard.setVisible(false);
+                        backCard.setVisible(true);
+                        
+                        // Scale back up to finish the flip
+                        scene.tweens.add({
+                            targets: container,
+                            scaleX: originalScaleX,
+                            duration: 200,
+                            ease: 'Linear',
+                            onComplete: () => {
+                                isFlipping = false;
+                                isFaceUp = false;
+                                if (callbackComplete) {
+                                    callbackComplete();
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+        }
     };
 
     const destroy = (): void => {
-        scene.add.tween({
-            targets: [card],
-            y: card.y - 1000,
-            easing: Phaser.Math.Easing.Elastic.In,
-            duration: 500,
+        scene.tweens.add({
+            targets: container,
+            y: container.y - 1000,
+            ease: 'Expo.In',
+            duration: 700,
             onComplete: () => {
-                card.destroy();
+                container.destroy();
             }
         });
     };
 
+    const hasFaceAt = (x: number, y: number): boolean => {
+        const bounds = container.getBounds();
+        return Phaser.Geom.Rectangle.Contains(bounds, x, y);
+    };
+
     return {
-        gameObject: card,
-        flip: flipCard,
+        gameObject: container,
+        flip,
         destroy,
-        cardName
+        cardName,
+        hasFaceAt
     };
 };
